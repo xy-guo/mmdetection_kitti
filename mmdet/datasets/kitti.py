@@ -7,6 +7,7 @@ import logging
 from collections import OrderedDict
 
 from mmdet.core import eval_recalls
+from mmdet.utils.debug import is_debug
 from .builder import DATASETS
 from .custom import CustomDataset
 
@@ -17,8 +18,11 @@ class KittiDataset(CustomDataset):
     CLASSES = ('Car', 'Pedestrian', 'Cyclist')
 
     def load_annotations(self, ann_file):
-        self.cat2label = {cat_id: i for i, cat_id in enumerate(self.CLASSES)}
+        self.cat_ids = self.CLASSES
+        self.cat2label = {cat_id: i for i, cat_id in enumerate(self.cat_ids)}
         metas = mmcv.load(ann_file)
+        if is_debug('FASTEPOCH'):
+            metas = metas[:64]
         img_infos = []
         for meta in metas:
             img_info = dict()
@@ -131,8 +135,7 @@ class KittiDataset(CustomDataset):
             bbox = ann_info['bbox'][i]  # 0-based [left, top, right, bottom]
             bbox3d = np.concatenate([ann_info['location'][i],
                                      ann_info['dimensions'][i],
-                                     [ann_info['rotation_y'][i]],
-                                     [ann_info['alpha'][i]]], 0)
+                                     [ann_info['rotation_y'][i]]], 0)
             difficulty = ann_info['difficulty'][i]  # 1, 2, 3
             # dimensions = ann_info['dimensions'][i]  # height, width, length
             # location = ann_info['location'][i]  # x, y, z incamera coordinates
@@ -141,26 +144,25 @@ class KittiDataset(CustomDataset):
             # occluded = ann_info['occluded'][i]  # 0,1,2,3; 3 means unkown
             # truncated = ann_info['truncated'][i]  # 0~1, leaving image boundary
 
-            if cls_name not in self.CLASSES:
+            if cls_name in self.CLASSES:
+                if difficulty >= 3:
+                    # either highly occluded, trucated or the object is too small
+                    gt_bboxes_ignore.append(bbox)
+                    gt_bboxes_3d_ignore.append(bbox3d)
+                else:
+                    gt_bboxes.append(bbox)
+                    gt_bboxes_3d.append(bbox3d)
+                    gt_labels.append(self.cat2label[cls_name])
+            else:
                 if cls_name == 'Van' and 'Car' in self.CLASSES:
                     gt_bboxes_ignore.append(bbox)
                     gt_bboxes_3d_ignore.append(bbox3d)
                 elif cls_name == 'Person_sitting' and 'Pedestrain' in self.CLASSES:
                     gt_bboxes_ignore.append(bbox)
                     gt_bboxes_3d_ignore.append(bbox3d)
-                elif cls_name == 'Misc' or cls_name == 'DontCare':
+                elif cls_name == 'DontCare':
                     gt_bboxes_ignore.append(bbox)
                     gt_bboxes_3d_ignore.append(bbox3d)
-                continue
-
-            if difficulty >= 3:
-                # either highly occluded, trucated or the object is too small
-                gt_bboxes_ignore.append(bbox)
-                gt_bboxes_3d_ignore.append(bbox3d)
-            else:
-                gt_bboxes.append(bbox)
-                gt_bboxes_3d.append(bbox3d)
-                gt_labels.append(self.cat2label[cls_name])
 
         if self.filter_empty_gt:
             assert len(
@@ -171,7 +173,7 @@ class KittiDataset(CustomDataset):
             gt_labels = np.array(gt_labels, dtype=np.int64)
         else:
             gt_bboxes = np.zeros((0, 4), dtype=np.float32)
-            gt_bboxes_3d = np.zeros((0, 8), dtype=np.float32)
+            gt_bboxes_3d = np.zeros((0, 7), dtype=np.float32)
             gt_labels = np.array([], dtype=np.int64)
 
         if gt_bboxes_ignore:
@@ -180,7 +182,7 @@ class KittiDataset(CustomDataset):
                 gt_bboxes_3d_ignore, dtype=np.float32)
         else:
             gt_bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
-            gt_bboxes_3d_ignore = np.zeros((0, 8), dtype=np.float32)
+            gt_bboxes_3d_ignore = np.zeros((0, 7), dtype=np.float32)
 
         ann = dict(
             bboxes=gt_bboxes,
@@ -235,29 +237,23 @@ class KittiDataset(CustomDataset):
 
         det_annos = []
         for idx, bbox_list in enumerate(results):
-            # iterate over each image
             sample_idx = self.data_infos[idx]['image_idx']
             num_example = 0
+
             anno = {'name': [], 'truncated': [], 'occluded': [], 'alpha': [], 'bbox': [], 'dimensions': [],
                     'location': [], 'rotation_y': [], 'score': []}
             for cls_idx, cls_bbox in enumerate(bbox_list):
-                cls_name = self.id_to_class[cls_idx + 1]
+                cls_name = self.cat_ids[cls_idx]
                 bbox_2d_preds = cls_bbox[:, :4]
                 scores = cls_bbox[:, 4]
                 # TODO: 3d bbox prediction
-                # box_3d_preds = ...
-                # scores = cls_bbox["scores"]
                 for bbox_2d_pred, score in zip(bbox_2d_preds, scores):
                     # TODO: out of range detection, should be filtered in the network part
-                    anno["name"].append(cls_name)
                     anno["score"].append(score)
+                    anno["name"].append(cls_name)
                     anno["truncated"].append(0.0)
                     anno["occluded"].append(0)
                     anno["bbox"].append(bbox_2d_pred)
-                    # anno["alpha"].append(-np.arctan2(-box_lidar[1], box_lidar[0]) + box[6])
-                    # anno["dimensions"].append(box[3:6])
-                    # anno["location"].append(box[:3])
-                    # anno["rotation_y"].append(box[6])
                     anno["alpha"].append(0.)
                     anno["dimensions"].append(
                         np.array([0, 0, 0], dtype=np.float32))
@@ -272,8 +268,8 @@ class KittiDataset(CustomDataset):
                 anno = {
                     'name': np.array([]), 'truncated': np.array([]), 'occluded': np.array([]),
                     'alpha': np.array([]), 'bbox': np.zeros([0, 4]), 'dimensions': np.zeros([0, 3]),
-                    'location': np.zeros([0, 3]), 'rotation_y': np.array([]), 'score': np.array([]),
-                }
+                    'location': np.zeros([0, 3]), 'rotation_y': np.array([]), 'score': np.array([])}
+
             anno["sample_idx"] = np.array(
                 [sample_idx] * num_example, dtype=np.int64)
             det_annos.append(anno)
@@ -314,28 +310,6 @@ class KittiDataset(CustomDataset):
                  logger=None,
                  txtfile_prefix=None,
                  proposal_nums=(100, 300, 1000)):
-        """Evaluation in Kitti protocol.
-
-        Args:
-            results (list): Testing results of the dataset.
-            metric (str | list[str]): Metrics to be evaluated.
-            logger (logging.Logger | str | None): Logger used for printing
-                related information during evaluation. Default: None.
-            txtfile_prefix (str | None): The prefix of txt files. It includes
-                the file path and the prefix of filename, e.g., "a/b/prefix".
-                If not specified, a temp file will be created. Default: None.
-            classwise (bool): Whether to evaluating the AP for each class.
-            proposal_nums (Sequence[int]): Proposal number used for evaluating
-                recalls, such as recall@100, recall@1000.
-                Default: (100, 300, 1000).
-            iou_thrs (Sequence[float]): IoU threshold used for evaluating
-                recalls. If set to a list, the average recall of all IoUs will
-                also be computed. Default: 0.5.
-
-        Returns:
-            dict[str: float]
-        """
-
         if 'annos' not in self.data_infos[0]:
             print_log('The testing results of the whole dataset is empty.',
                       logger=logger, level=logging.ERROR)
@@ -344,26 +318,17 @@ class KittiDataset(CustomDataset):
 
         print_log('Evaluating KITTI object detection \n', logger=logger)
         det_annos = self.format_results(results, txtfile_prefix)
-        gt_annos = [self.data_infos[idx]['annos'] for idx in range(len(self))]
+        gt_annos = [x['annos'] for x in self.data_infos]
 
         from mmdet.datasets.kitti_object_eval_python.eval import get_official_eval_result
         eval_results = get_official_eval_result(
             gt_annos, det_annos, self.CLASSES)
 
-        # evaluate proposal_fast
-        # ar = self.fast_eval_recall(results, proposal_nums, iou_thrs, logger='silent')
-        # log_msg = []
-        # for i, num in enumerate(proposal_nums):
-        #     eval_results['AR@{}'.format(num)] = ar[i]
-        #     log_msg.append('\nAR@{}\t{:.4f}'.format(num, ar[i]))
-        # log_msg = ''.join(log_msg)
-        # print_log(log_msg, logger=logger)
-
         return_results = OrderedDict()
         for cls_name, ret in eval_results.items():
             for k, v in ret.items():
-                return_results[f"{cls_name}_{k}"] = ','.join(
-                    [f"{vv:.3f}" for vv in v])
-        for k, v in return_results.items():
-            print_log(f"{k}: {v}", logger=logger)
+                msg = ','.join([f"{vv:.3f}" for vv in v])
+                return_results[f"{cls_name}_{k}"] = msg
+                print_log(f"{cls_name}_{k}:  {msg}", logger=logger)
+
         return return_results
