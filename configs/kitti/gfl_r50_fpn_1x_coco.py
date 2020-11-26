@@ -67,3 +67,5 @@ total_epochs = 24
 log_config = dict(interval=10)
 # For better, more stable performance initialize from COCO: 40.2AP
 load_from = 'http://download.openmmlab.com/mmdetection/v2.0/gfl/gfl_r50_fpn_1x_coco/gfl_r50_fpn_1x_coco_20200629_121244-25944287.pth'
+# 42.9AP
+# load_from = 'http://download.openmmlab.com/mmdetection/v2.0/gfl/gfl_r50_fpn_mstrain_2x_coco/gfl_r50_fpn_mstrain_2x_coco_20200629_213802-37bb1edc.pth'
