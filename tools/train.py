@@ -121,9 +121,6 @@ def main():
         cfg.gpu_ids = range(world_size)
 
     set_debug_mode(args.debug)
-    if getattr(cfg, 'resume_from', None) is None and not is_debug():
-        assert not os.path.isdir(osp.abspath(
-            cfg.work_dir)), 'dir already exist'
 
     # create work_dir
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
