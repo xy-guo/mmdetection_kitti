@@ -72,7 +72,5 @@ lr_config = dict(
     step=[16, 22])
 total_epochs = 24
 log_config = dict(interval=10)
-# For better, more stable performance initialize from COCO
+# For better, more stable performance initialize from COCO: 36.6AP
 load_from = 'http://download.openmmlab.com/mmdetection/v2.0/fcos/fcos_r50_caffe_fpn_gn-head_4x4_1x_coco/fcos_r50_caffe_fpn_gn_1x_4gpu_20200218-7831950c.pth'
-# load_from = 'http://download.openmmlab.com/mmdetection/v2.0/fcos/fcos_center-normbbox-centeronreg-giou_r50_caffe_fpn_gn-head_4x4_1x_coco/fcos_center-normbbox-centeronreg-giou_r50_caffe_fpn_gn-head_4x4_1x_coco_20200603-67b3859f.pth'
-# load_from = 'http://download.openmmlab.com/mmdetection/v2.0/fcos/fcos_center-normbbox-centeronreg-giou_r50_caffe_fpn_gn-head_dcn_4x4_1x_coco/fcos_center-normbbox-centeronreg-giou_r50_caffe_fpn_gn-head_dcn_4x4_1x_coco_20200603-ed16da04.pth'
