@@ -214,12 +214,14 @@ class LoadAnnotations(object):
 
     def __init__(self,
                  with_bbox=True,
+                 with_bbox3d=False,
                  with_label=True,
                  with_mask=False,
                  with_seg=False,
                  poly2mask=True,
                  file_client_args=dict(backend='disk')):
         self.with_bbox = with_bbox
+        self.with_bbox3d = with_bbox3d
         self.with_label = with_label
         self.with_mask = with_mask
         self.with_seg = with_seg
@@ -245,6 +247,29 @@ class LoadAnnotations(object):
             results['gt_bboxes_ignore'] = gt_bboxes_ignore.copy()
             results['bbox_fields'].append('gt_bboxes_ignore')
         results['bbox_fields'].append('gt_bboxes')
+        return results
+
+    def _load_bboxes3d(self, results):
+        """Private function to load bounding box annotations.
+
+        Args:
+            results (dict): Result dict from :obj:`mmdet.CustomDataset`.
+
+        Returns:
+            dict: The dict contains loaded bounding box annotations.
+        """
+
+        ann_info = results['ann_info']
+        results['gt_bboxes_3d'] = ann_info['bboxes_3d'].copy()
+
+        if 'bbox_3d_fields' not in results:
+            results['bbox_3d_fields'] = []
+
+        gt_bboxes_3d_ignore = ann_info.get('bboxes_3d_ignore', None)
+        if gt_bboxes_3d_ignore is not None:
+            results['gt_bboxes_3d_ignore'] = gt_bboxes_3d_ignore.copy()
+            results['bbox_3d_fields'].append('gt_bboxes_3d_ignore')
+        results['bbox_3d_fields'].append('gt_bboxes_3d')
         return results
 
     def _load_labels(self, results):
@@ -363,6 +388,10 @@ class LoadAnnotations(object):
 
         if self.with_bbox:
             results = self._load_bboxes(results)
+            if results is None:
+                return None
+        if self.with_bbox3d:
+            results = self._load_bboxes3d(results)
             if results is None:
                 return None
         if self.with_label:

@@ -6,6 +6,7 @@ from numpy import random
 
 from mmdet.core import PolygonMasks
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
+from mmdet.utils.det3d import box_np_ops
 from ..builder import PIPELINES
 
 try:
@@ -258,6 +259,17 @@ class Resize(object):
                     backend=self.backend)
             results['gt_semantic_seg'] = gt_seg
 
+    def _resize_intrinsics(self, results):
+        # available camera param keys: K, fL, t2to3, velo2cam2, velo2cam3
+        # when do scaling, only f is scaled
+        if 'K' in results:
+            scale_factor = results['scale_factor']
+            assert isinstance(scale_factor, float)
+            K = results['K'].copy()
+            K[:2, :3] *= scale_factor
+            results['K'] = K
+            results['fL'] = results['fL'] * scale_factor
+
     def __call__(self, results):
         """Call function to resize images, bounding boxes, masks, semantic
         segmentation map.
@@ -287,6 +299,8 @@ class Resize(object):
         self._resize_bboxes(results)
         self._resize_masks(results)
         self._resize_seg(results)
+        self._resize_intrinsics(results)
+
         return results
 
     def __repr__(self):
@@ -442,6 +456,9 @@ class RandomFlip(object):
                 results[key] = self.bbox_flip(results[key],
                                               results['img_shape'],
                                               results['flip_direction'])
+            # flip bboxes 3d
+            # TODO: flip 3d bboxes
+
             # flip masks
             for key in results.get('mask_fields', []):
                 results[key] = results[key].flip(results['flip_direction'])
@@ -450,10 +467,145 @@ class RandomFlip(object):
             for key in results.get('seg_fields', []):
                 results[key] = mmcv.imflip(
                     results[key], direction=results['flip_direction'])
+
+            # flip intrinsics
+            # available camera param keys: K, fL, t2to3, velo2cam2, velo2cam3
+            if 'K' in results:
+                raise NotImplementedError("cannot flip when in stereo mode")
         return results
 
     def __repr__(self):
         return self.__class__.__name__ + f'(flip_ratio={self.flip_ratio})'
+
+
+@PIPELINES.register_module()
+class StereoSwap(object):
+    """Swap the left&right images & bbox
+
+    If the input dict contains the key "swap", then the flag will be used,
+    otherwise it will be randomly decided by a ratio specified in the init
+    method.
+
+    Args:
+        swap_ratio (float, optional): The swapping probability.
+    """
+
+    def __init__(self, swap_ratio=None):
+        self.swap_ratio = swap_ratio
+        if swap_ratio is not None:
+            assert swap_ratio >= 0 and swap_ratio <= 1
+
+    # def bbox_shift(self, bboxes, shifted_pixels):
+    #     shifted = bboxes.copy()
+    #     shifted[..., 0::4] -= shifted_pixels[:, None]  # x1
+    #     shifted[..., 2::4] -= shifted_pixels[:, None]  # x2
+    #     return shifted
+
+    # def bbox_flip(self, bboxes, img_shape):
+    #     assert bboxes.shape[-1] % 4 == 0
+    #     swapped = bboxes.copy()
+    #     w = img_shape[1]
+    #     swapped[..., 0::4] = w - bboxes[..., 2::4] - 1
+    #     swapped[..., 2::4] = w - bboxes[..., 0::4] - 1
+    #     return swapped
+
+    # def bbox_swap(self, bboxes, depth, fL, img_shape):
+    #     shifted_pixels = fL / depth
+    #     shifted = self.bbox_shift(bboxes, shifted_pixels)
+    #     flipped = self.bbox_flip(shifted, img_shape)
+    #     return flipped
+
+    def bbox_3d_swap(self, bboxes_3d, t2to3, img_shape):
+        """swap the 3d bboxes from left view to right view.
+
+        Arguments:
+            bboxes_3d {array: [N, 8]} -- 3d bboxes
+            t2to3 {array: [3]} -- translation from left view to right view
+            img_shape {tuple: [3]} -- height, width, 3
+
+        Returns:
+
+        """
+        bboxes_3d = bboxes_3d.copy()
+        loc = bboxes_3d[:, :3]
+        dims = bboxes_3d[:, 3:6]
+        rot_y = bboxes_3d[:, 6]
+        alpha = bboxes_3d[:, 7]
+        # loc.x is flipped, dim does not change
+        # transform the location for left camera coordinate to the right camera coordinate
+        # then do the mirror transformation
+        loc[:, :] += t2to3
+        loc[:, 0] *= -1
+        # rot_y is z
+        rot_y = np.pi - np.mod(rot_y, np.pi * 2)
+        alpha = -alpha
+        bboxes_3d = np.concatenate(
+            [loc, dims, rot_y[:, None], alpha[:, None]], 1)
+        return bboxes_3d
+
+    def bbox_3d_to_2d(self, bboxes_3d, K, img_shape):
+        bboxes_3d = bboxes_3d.copy()
+        loc = bboxes_3d[:, :3]
+        dims = bboxes_3d[:, 3:6]
+        rot_y = bboxes_3d[:, 6]
+        # the origin should be [0.5, 1.0, 0.5] for camera coordinates, rotation axis is y-axis (1)
+        # corners: [N, 8, 3]
+        corners = box_np_ops.center_to_corner_box3d(
+            loc, dims, rot_y, origin=[0.5, 1.0, 0.5], axis=1)
+        corners_2d = corners @ K.T
+        corners_2d = corners_2d[..., :2] / corners_2d[..., 2:3]
+        # min_xy, max_xy: [N, 2]
+        min_xy = corners_2d.min(1)
+        max_xy = corners_2d.max(1)
+        min_xy = np.clip(min_xy, [0, 0], [img_shape[1], img_shape[0]])
+        max_xy = np.clip(max_xy, [0, 0], [img_shape[1], img_shape[0]])
+        bboxes = np.concatenate([min_xy, max_xy], 1)
+        bboxes = bboxes.astype(np.float32)
+        return bboxes
+
+    def __call__(self, results):
+        if 'left_img' not in results or 'right_img' not in results:
+            raise ValueError("please make sure to use swap aug in stereo mode")
+        if 'swap' not in results:
+            swap = True if np.random.rand() < self.swap_ratio else False
+            results['swap'] = swap
+        if results['swap']:
+            # swap filename
+            results['left_filename'], results['right_filename'] = results['right_filename'], results['left_filename']
+            # swap images
+            results['left_img'], results['right_img'] = mmcv.imflip(
+                results['right_img'], direction='horizontal'), mmcv.imflip(results['left_img'], direction='horizontal')
+
+            if results.get('mask_fields', None):
+                raise ValueError('mask_fields is not supported in Swap')
+            if results.get('seg_fields', None):
+                raise ValueError('seg_fields is not supported in Swap')
+
+            # flip intrinsics
+            # available camera param keys: K, fL, t2to3, velo2cam2, velo2cam3
+            if 'K' in results:
+                w = results['img_shape'][1]  # image width
+                # update K
+                K = results['K'].copy()
+                K[0, 2] = w - 1 - K[0, 2]  # cx = (w-1) - cx
+                results['K'] = K
+                # TODO: how to deal with velo2cam2 velo2cam3?
+
+            # swap bboxes 3d
+            for key in ["gt_bboxes_3d", "gt_bboxes_3d_ignore"]:
+                results[key] = self.bbox_3d_swap(
+                    results[key], results["t2to3"], results['img_shape'])
+
+            # swap bboxes
+            results["gt_bboxes"] = self.bbox_3d_to_2d(
+                results["gt_bboxes_3d"], results['K'], results['img_shape'])
+            results["gt_bboxes_ignore"] = self.bbox_3d_to_2d(
+                results["gt_bboxes_3d_ignore"], results['K'], results['img_shape'])
+        return results
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(swap_ratio={})'.format(
+            self.swap_ratio)
 
 
 @PIPELINES.register_module()
@@ -1507,7 +1659,7 @@ class RandomCenterCropPad(object):
             cropped_center_y - top, cropped_center_y + bottom,
             cropped_center_x - left, cropped_center_x + right
         ],
-                          dtype=np.float32)
+            dtype=np.float32)
 
         return cropped_img, border, patch
 
