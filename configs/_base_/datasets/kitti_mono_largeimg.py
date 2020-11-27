@@ -19,9 +19,11 @@ test_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(
         type='MultiScaleFlipAug',  # multi-scale and flip
-        image_scale=(1920, 800),  # only one scale
+        img_scale=(1920, 800),  # only one scale
         flip=False,  # do not use flipping aug
         transforms=[
+            dict(type='Resize', keep_ratio=True),
+            dict(type='RandomFlip'),
             dict(type='Normalize', **img_norm_cfg),
             dict(type='Pad', size_divisor=32),
             dict(type='ImageToTensor', keys=['img']),
