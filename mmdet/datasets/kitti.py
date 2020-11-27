@@ -155,11 +155,13 @@ class KittiDataset(CustomDataset):
                     gt_labels.append(self.cat2label[cls_name])
             else:
                 if cls_name == 'Van' and 'Car' in self.CLASSES:
-                    gt_bboxes_ignore.append(bbox)
-                    gt_bboxes_3d_ignore.append(bbox3d)
+                    gt_bboxes.append(bbox)
+                    gt_bboxes_3d.append(bbox3d)
+                    gt_labels.append(self.cat2label['Car'])
                 elif cls_name == 'Person_sitting' and 'Pedestrian' in self.CLASSES:
-                    gt_bboxes_ignore.append(bbox)
-                    gt_bboxes_3d_ignore.append(bbox3d)
+                    gt_bboxes.append(bbox)
+                    gt_bboxes_3d.append(bbox3d)
+                    gt_labels.append(self.cat2label['Pedestrian'])
                 elif cls_name == 'DontCare':
                     gt_bboxes_ignore.append(bbox)
                     gt_bboxes_3d_ignore.append(bbox3d)
