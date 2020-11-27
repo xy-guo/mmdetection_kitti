@@ -57,8 +57,36 @@ test_cfg = dict(
     score_thr=0.05,
     nms=dict(type='nms', iou_threshold=0.5),
     max_per_img=100)
+# update img_norm_cfg, remember to update train/test_pipeline since the usage of img_norm_cfg
 img_norm_cfg = dict(
     mean=[102.9801, 115.9465, 122.7717], std=[1.0, 1.0, 1.0], to_rgb=False)
+train_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations', with_bbox=True, with_bbox3d=True),
+    dict(type='RandomFlip', flip_ratio=0.5),
+    dict(type='Normalize', **img_norm_cfg),
+    dict(type='Pad', size_divisor=32),
+    dict(type='DefaultFormatBundle'),
+    dict(type='Collect',
+         keys=['img', 'gt_bboxes', 'gt_bboxes_ignore', 'gt_labels'],
+         meta_keys=['filename', 'ori_shape', 'img_shape',
+                    'pad_shape', 'scale_factor', 'flip', 'flip_direction', 'img_norm_cfg'])
+]
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(
+        type='MultiScaleFlipAug',  # multi-scale and flip
+        scale_factor=1.0,  # (1920, 800),  # only one scale
+        flip=False,  # do not use flipping aug
+        transforms=[
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='Pad', size_divisor=32),
+            dict(type='ImageToTensor', keys=['img']),
+            dict(type='Collect',
+                 keys=['img'],
+                 meta_keys=['filename', 'ori_shape', 'img_shape',
+                            'pad_shape', 'scale_factor', 'flip', 'flip_direction', 'img_norm_cfg'])
+        ])]
 # optimizer
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001,
                  paramwise_cfg=dict(bias_lr_mult=2., bias_decay_mult=0.))
