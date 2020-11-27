@@ -155,14 +155,20 @@ class KittiDataset(CustomDataset):
                     gt_labels.append(self.cat2label[cls_name])
             else:
                 if cls_name == 'Van' and 'Car' in self.CLASSES:
-                    gt_bboxes_ignore.append(bbox)
-                    gt_bboxes_3d_ignore.append(bbox3d)
-                elif cls_name == 'Person_sitting' and 'Pedestrain' in self.CLASSES:
-                    gt_bboxes_ignore.append(bbox)
-                    gt_bboxes_3d_ignore.append(bbox3d)
+                    gt_bboxes.append(bbox)
+                    gt_bboxes_3d.append(bbox3d)
+                    gt_labels.append(self.cat2label['Car'])
+                elif cls_name == 'Person_sitting' and 'Pedestrian' in self.CLASSES:
+                    gt_bboxes.append(bbox)
+                    gt_bboxes_3d.append(bbox3d)
+                    gt_labels.append(self.cat2label['Pedestrian'])
                 elif cls_name == 'DontCare':
                     gt_bboxes_ignore.append(bbox)
                     gt_bboxes_3d_ignore.append(bbox3d)
+                else:
+                    if cls_name not in ['Truck', 'Tram', 'Misc']:
+                        print(cls_name, 'not handled')
+
 
         if self.filter_empty_gt:
             assert len(
