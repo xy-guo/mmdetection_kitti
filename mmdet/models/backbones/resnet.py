@@ -109,7 +109,8 @@ class Bottleneck(nn.Module):
                  conv_cfg=None,
                  norm_cfg=dict(type='BN'),
                  dcn=None,
-                 plugins=None):
+                 plugins=None,
+                 with_out_relu=True):
         """Bottleneck block for ResNet.
 
         If style is "pytorch", the stride-two layer is the 3x3 conv layer, if
@@ -135,6 +136,7 @@ class Bottleneck(nn.Module):
         self.with_dcn = dcn is not None
         self.plugins = plugins
         self.with_plugins = plugins is not None
+        self.with_out_relu = with_out_relu
 
         if self.with_plugins:
             # collect plugins for conv1/conv2/conv3
@@ -298,7 +300,8 @@ class Bottleneck(nn.Module):
         else:
             out = _inner_forward(x)
 
-        out = self.relu(out)
+        if self.with_out_relu:
+            out = self.relu(out)
 
         return out
 
