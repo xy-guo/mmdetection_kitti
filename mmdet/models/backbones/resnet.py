@@ -24,7 +24,8 @@ class BasicBlock(nn.Module):
                  conv_cfg=None,
                  norm_cfg=dict(type='BN'),
                  dcn=None,
-                 plugins=None):
+                 plugins=None,
+                 with_out_relu=True):
         super(BasicBlock, self).__init__()
         assert dcn is None, 'Not implemented yet.'
         assert plugins is None, 'Not implemented yet.'
@@ -51,6 +52,7 @@ class BasicBlock(nn.Module):
         self.stride = stride
         self.dilation = dilation
         self.with_cp = with_cp
+        self.with_out_relu = with_out_relu
 
     @property
     def norm1(self):
@@ -87,7 +89,8 @@ class BasicBlock(nn.Module):
         else:
             out = _inner_forward(x)
 
-        out = self.relu(out)
+        if self.with_out_relu:
+            out = self.relu(out)
 
         return out
 
@@ -381,7 +384,9 @@ class ResNet(nn.Module):
                  stage_with_dcn=(False, False, False, False),
                  plugins=None,
                  with_cp=False,
-                 zero_init_residual=True):
+                 with_max_pool=True,
+                 zero_init_residual=True,
+                 block_with_final_relu=True):
         super(ResNet, self).__init__()
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for resnet')
@@ -414,6 +419,8 @@ class ResNet(nn.Module):
         self.block, stage_blocks = self.arch_settings[depth]
         self.stage_blocks = stage_blocks[:num_stages]
         self.inplanes = stem_channels
+        self.with_max_pool = with_max_pool
+        self.block_with_final_relu = block_with_final_relu
 
         self._make_stem_layer(in_channels, stem_channels)
 
@@ -440,7 +447,8 @@ class ResNet(nn.Module):
                 conv_cfg=conv_cfg,
                 norm_cfg=norm_cfg,
                 dcn=dcn,
-                plugins=stage_plugins)
+                plugins=stage_plugins,
+                with_out_relu=self.block_with_final_relu)
             self.inplanes = planes * self.block.expansion
             layer_name = f'layer{i + 1}'
             self.add_module(layer_name, res_layer)
@@ -568,7 +576,8 @@ class ResNet(nn.Module):
                 self.norm_cfg, stem_channels, postfix=1)
             self.add_module(self.norm1_name, norm1)
             self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        if self.with_max_pool:
+            self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
     def _freeze_stages(self):
         if self.frozen_stages >= 0:
@@ -628,7 +637,8 @@ class ResNet(nn.Module):
             x = self.conv1(x)
             x = self.norm1(x)
             x = self.relu(x)
-        x = self.maxpool(x)
+        if self.with_max_pool:
+            x = self.maxpool(x)
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)
