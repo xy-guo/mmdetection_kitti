@@ -5,10 +5,10 @@ _base_ = [
 # ATSS Model
 model = dict(
     type='ATSS',
-    pretrained='torchvision://resnet34',
+    pretrained=None,  # 'torchvision://resnet50',
     backbone=dict(
         type='ResNet',
-        depth=34,
+        depth=50,
         num_stages=4,
         out_indices=(0, 1, 2, 3),
         frozen_stages=1,
@@ -21,8 +21,8 @@ model = dict(
         base_channels=64),
     neck=dict(
         type='FPN',
-        in_channels=[64, 128, 256, 512],
-        out_channels=256,  # TODO
+        in_channels=[256, 512, 1024, 2048],
+        out_channels=256,
         start_level=1,
         add_extra_convs='on_output',
         num_outs=5),
@@ -35,9 +35,9 @@ model = dict(
         anchor_generator=dict(
             type='AnchorGenerator',
             ratios=[1.0],
-            octave_base_scale=16,
+            octave_base_scale=8,
             scales_per_octave=1,
-            strides=[4, 8, 16, 32, 64]),
+            strides=[8, 16, 32, 64, 128]),
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder',
             target_means=[.0, .0, .0, .0],
@@ -76,4 +76,7 @@ lr_config = dict(
 total_epochs = 24
 log_config = dict(interval=10)
 # For better, more stable performance initialize from COCO: 39.4AP
-# load_from = 'http://download.openmmlab.com/mmdetection/v2.0/atss/atss_r50_fpn_1x_coco/atss_r50_fpn_1x_coco_20200209-985f7bd0.pth'
+if model['pretrained'] is not None:
+    load_from = None
+else:
+    load_from = 'http://download.openmmlab.com/mmdetection/v2.0/atss/atss_r50_fpn_1x_coco/atss_r50_fpn_1x_coco_20200209-985f7bd0.pth'
