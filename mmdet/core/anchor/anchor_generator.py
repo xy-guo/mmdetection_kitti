@@ -87,7 +87,7 @@ class AnchorGenerator(object):
 
         # calculate scales of anchors
         assert ((octave_base_scale is not None
-                and scales_per_octave is not None) ^ (scales is not None)), \
+                 and scales_per_octave is not None) ^ (scales is not None)), \
             'scales and octave_base_scale with scales_per_octave cannot' \
             ' be set at the same time'
         if scales is not None:
@@ -137,6 +137,7 @@ class AnchorGenerator(object):
                     scales=self.scales,
                     ratios=self.ratios,
                     center=center))
+        print('base_anchors', multi_level_base_anchors)
         return multi_level_base_anchors
 
     def gen_single_level_base_anchors(self,
