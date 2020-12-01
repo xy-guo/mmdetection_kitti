@@ -1,3 +1,4 @@
+# TODO: not working
 _base_ = [
     '../_base_/datasets/kitti_mono.py',
     '../_base_/default_runtime.py'
@@ -34,10 +35,10 @@ model = dict(
         feat_channels=256,
         anchor_generator=dict(
             type='AnchorGenerator',
-            octave_base_scale=4,
+            octave_base_scale=8,
             scales_per_octave=3,
             ratios=[0.5, 1.0, 2.0],
-            strides=[8, 16, 32, 64, 128]),
+            strides=[4, 8, 16, 32, 64]),
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder',
             target_means=[.0, .0, .0, .0],
@@ -48,7 +49,7 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=1.0),
-        loss_bbox=dict(type='GIoULoss', loss_weight=2.0)))
+        loss_bbox=dict(type='L1Loss', loss_weight=1.0)))
 
 train_cfg = dict(
     assigner=dict(

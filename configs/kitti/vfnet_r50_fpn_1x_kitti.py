@@ -1,3 +1,5 @@
+# COCO pt
+# 97.689	92.311	86.251	79.212	72.432	66.424	79.228	57.605	55.05
 _base_ = [
     '../_base_/datasets/kitti_mono.py',
     '../_base_/default_runtime.py'

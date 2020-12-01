@@ -1,3 +1,5 @@
+# Imagenet pt
+# 97.161	91.56	84.641	76.671	69.092	61.406	77.551	54.158	51.365
 _base_ = [
     '../_base_/datasets/kitti_mono.py',
     '../_base_/default_runtime.py'
