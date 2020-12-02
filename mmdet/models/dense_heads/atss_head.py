@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from mmcv.cnn import ConvModule, Scale, bias_init_with_prob, normal_init
@@ -8,7 +9,9 @@ from mmdet.core import (anchor_inside_flags, build_assigner, build_sampler,
                         reduce_mean, unmap)
 from ..builder import HEADS, build_loss
 from .anchor_head import AnchorHead
-
+from mmdet.utils.debug import is_debug, is_master
+from mmdet.utils import get_root_logger
+from math import sqrt
 EPS = 1e-12
 
 
@@ -490,6 +493,8 @@ class ATSSHead(AnchorHead):
         num_level_anchors = [anchors.size(0) for anchors in anchor_list[0]]
         num_level_anchors_list = [num_level_anchors] * num_imgs
 
+        ori_anchor_list = anchor_list.copy()
+
         # concat all level anchors and flags to a single tensor
         for i in range(num_imgs):
             assert len(anchor_list[i]) == len(valid_flag_list[i])
@@ -502,7 +507,7 @@ class ATSSHead(AnchorHead):
         if gt_labels_list is None:
             gt_labels_list = [None for _ in range(num_imgs)]
         (all_anchors, all_labels, all_label_weights, all_bbox_targets,
-         all_bbox_weights, pos_inds_list, neg_inds_list) = multi_apply(
+         all_bbox_weights, pos_inds_list, neg_inds_list, assign_results_list) = multi_apply(
              self._get_target_single,
              anchor_list,
              valid_flag_list,
@@ -512,10 +517,49 @@ class ATSSHead(AnchorHead):
              gt_labels_list,
              img_metas,
              label_channels=label_channels,
-             unmap_outputs=unmap_outputs)
+             unmap_outputs=unmap_outputs,
+             return_sampling_results=True)
         # no valid anchors
         if any([labels is None for labels in all_labels]):
             return None
+
+        if is_debug('ASSIGNER') and is_master():
+            logger = get_root_logger('INFO')
+            for gt_boxes_per_img, assign_result_per_img, anchor_list_per_img in zip(gt_bboxes_list, assign_results_list, ori_anchor_list):
+                logger.info('----assigner results for current image----')
+                for box_id, gt_box in enumerate(gt_boxes_per_img):
+                    pos_inds = assign_result_per_img.gt_inds == box_id + 1
+                    if isinstance(anchor_list_per_img, (list, tuple)):
+                        pos_inds = torch.split(
+                            pos_inds, [x.shape[0] for x in anchor_list_per_img])
+                    else:
+                        pos_inds = [pos_inds]
+                    pos_inds = [x.view(-1, self.num_anchors) for x in pos_inds]
+                    logger.info(
+                        f'box {box_id}: assigner results for box {box_id}: {gt_box}')
+                    box_w, box_h = gt_box[2] - gt_box[0], gt_box[3] - gt_box[1]
+                    logger.info(
+                        f'length {sqrt(box_w * box_h)}, ratio {box_h / box_w}')
+                    num_pos_anchors_per_lvl = torch.stack(
+                        [x.view(-1).sum() for x in pos_inds], 0)
+                    logger.info(
+                        f'box {box_id}: num of anchors [per lvl]: {num_pos_anchors_per_lvl.cpu().numpy()}')
+                    num_pos_anchors_per_lvl = torch.stack(
+                        [x.sum(0) for x in pos_inds], 0).transpose(1, 0)
+                    log_str = f'box {box_id}: num of anchors [per lvl x per anchor]: \n'
+                    np.set_printoptions(formatter={'int': '{: 5d}'.format})
+                    log_str += f'            : {np.array(self.anchor_generator.base_sizes) * self.anchor_generator.octave_base_scale}\n'
+                    for anchor_id, num_pos_anchors_per_lvl_per_anchor in enumerate(num_pos_anchors_per_lvl):
+                        ac = self.anchor_generator.base_anchors[0][anchor_id]
+                        ac_area = (ac[2] - ac[0]) * (ac[3] - ac[1])
+                        ac_ratio = (ac[3] - ac[1]) / (ac[2] - ac[0])
+                        acl = self.anchor_generator.base_anchors[-1][anchor_id]
+                        acl_area = (acl[2] - acl[0]) * (acl[3] - acl[1])
+                        acl_ratio = (acl[3] - acl[1]) / (acl[2] - acl[0])
+                        log_str += f'({sqrt(ac_area):.2f}/{ac_ratio:.2f}): {num_pos_anchors_per_lvl_per_anchor.cpu().numpy()}: ({sqrt(acl_area):.2f}/{acl_ratio:.2f}):\n'
+                    logger.info(log_str)
+                    logger.info('box {box_id}: end')
+
         # sampled anchors of all images
         num_total_pos = sum([max(inds.numel(), 1) for inds in pos_inds_list])
         num_total_neg = sum([max(inds.numel(), 1) for inds in neg_inds_list])
@@ -541,7 +585,8 @@ class ATSSHead(AnchorHead):
                            gt_labels,
                            img_meta,
                            label_channels=1,
-                           unmap_outputs=True):
+                           unmap_outputs=True,
+                           return_sampling_results=False):
         """Compute regression, classification targets for anchors in a single
         image.
 
@@ -639,8 +684,12 @@ class ATSSHead(AnchorHead):
             bbox_targets = unmap(bbox_targets, num_total_anchors, inside_flags)
             bbox_weights = unmap(bbox_weights, num_total_anchors, inside_flags)
 
-        return (anchors, labels, label_weights, bbox_targets, bbox_weights,
-                pos_inds, neg_inds)
+        if not return_sampling_results:
+            return (anchors, labels, label_weights, bbox_targets, bbox_weights,
+                    pos_inds, neg_inds)
+        else:
+            return (anchors, labels, label_weights, bbox_targets, bbox_weights,
+                    pos_inds, neg_inds, assign_result)
 
     def get_num_level_anchors_inside(self, num_level_anchors, inside_flags):
         split_inside_flags = torch.split(inside_flags, num_level_anchors)
