@@ -2,13 +2,16 @@ import torch
 import torch.nn as nn
 from mmcv.cnn import normal_init
 from mmcv.runner import force_fp32
-
+import numpy as np
 from mmdet.core import (anchor_inside_flags, build_anchor_generator,
                         build_assigner, build_bbox_coder, build_sampler,
                         images_to_levels, multi_apply, multiclass_nms, unmap)
 from ..builder import HEADS, build_loss
 from .base_dense_head import BaseDenseHead
 from .dense_test_mixins import BBoxTestMixin
+from mmdet.utils.debug import is_debug, is_master
+from mmdet.utils import get_root_logger
+from math import sqrt
 
 
 @HEADS.register_module()
@@ -177,7 +180,8 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
                             gt_labels,
                             img_meta,
                             label_channels=1,
-                            unmap_outputs=True):
+                            unmap_outputs=True,
+                            return_assign_results=False):
         """Compute regression and classification targets for anchors in a
         single image.
 
@@ -219,6 +223,7 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
         assign_result = self.assigner.assign(
             anchors, gt_bboxes, gt_bboxes_ignore,
             None if self.sampling else gt_labels)
+
         sampling_result = self.sampler.sample(assign_result, anchors,
                                               gt_bboxes)
 
@@ -265,8 +270,12 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
             bbox_targets = unmap(bbox_targets, num_total_anchors, inside_flags)
             bbox_weights = unmap(bbox_weights, num_total_anchors, inside_flags)
 
-        return (labels, label_weights, bbox_targets, bbox_weights, pos_inds,
-                neg_inds, sampling_result)
+        if not return_assign_results:
+            return (labels, label_weights, bbox_targets, bbox_weights, pos_inds,
+                    neg_inds, sampling_result)
+        else:
+            return (labels, label_weights, bbox_targets, bbox_weights, pos_inds,
+                    neg_inds, sampling_result, assign_result)
 
     def get_targets(self,
                     anchor_list,
@@ -343,10 +352,46 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
             gt_labels_list,
             img_metas,
             label_channels=label_channels,
-            unmap_outputs=unmap_outputs)
+            unmap_outputs=unmap_outputs,
+            return_assign_results=True)
         (all_labels, all_label_weights, all_bbox_targets, all_bbox_weights,
-         pos_inds_list, neg_inds_list, sampling_results_list) = results[:7]
-        rest_results = list(results[7:])  # user-added return values
+         pos_inds_list, neg_inds_list, sampling_results_list, assign_results_list) = results[:8]
+
+        if is_debug('ASSIGNER') and is_master():
+            logger = get_root_logger('INFO')
+            for gt_boxes_per_img, assign_result_per_img, anchor_list_per_img in zip(gt_bboxes_list, assign_results_list, anchor_list):
+                logger.info('----assigner results for current image----')
+                for box_id, gt_box in enumerate(gt_boxes_per_img):
+                    pos_inds = assign_result_per_img.gt_inds == box_id + 1
+                    pos_inds = torch.split(
+                        pos_inds, [x.shape[0] for x in anchor_list_per_img])
+                    pos_inds = [x.view(-1, self.num_anchors) for x in pos_inds]
+                    logger.info(
+                        f'box {box_id}: assigner results for box {box_id}: {gt_box}')
+                    box_w, box_h = gt_box[2] - gt_box[0], gt_box[3] - gt_box[1]
+                    logger.info(
+                        f'length {sqrt(box_w * box_h)}, ratio {box_h / box_w}')
+                    num_pos_anchors_per_lvl = torch.stack(
+                        [x.view(-1).sum() for x in pos_inds], 0)
+                    logger.info(
+                        f'box {box_id}: num of anchors [per lvl]: {num_pos_anchors_per_lvl.cpu().numpy()}')
+                    num_pos_anchors_per_lvl = torch.stack(
+                        [x.sum(0) for x in pos_inds], 0).transpose(1, 0)
+                    log_str = f'box {box_id}: num of anchors [per lvl x per anchor]: \n'
+                    np.set_printoptions(formatter={'int': '{: 5d}'.format})
+                    log_str += f'            : {np.array(self.anchor_generator.base_sizes) * self.anchor_generator.octave_base_scale}\n'
+                    for anchor_id, num_pos_anchors_per_lvl_per_anchor in enumerate(num_pos_anchors_per_lvl):
+                        ac = self.anchor_generator.base_anchors[0][anchor_id]
+                        ac_area = (ac[2] - ac[0]) * (ac[3] - ac[1])
+                        ac_ratio = (ac[3] - ac[1]) / (ac[2] - ac[0])
+                        acl = self.anchor_generator.base_anchors[-1][anchor_id]
+                        acl_area = (acl[2] - acl[0]) * (acl[3] - acl[1])
+                        acl_ratio = (acl[3] - acl[1]) / (acl[2] - acl[0])
+                        log_str += f'({sqrt(ac_area):.2f}/{ac_ratio:.2f}): {num_pos_anchors_per_lvl_per_anchor.cpu().numpy()}: ({sqrt(acl_area):.2f}/{acl_ratio:.2f}):\n'
+                    logger.info(log_str)
+                    logger.info('box {box_id}: end')
+
+        rest_results = list(results[8:])  # user-added return values
         # no valid anchors
         if any([labels is None for labels in all_labels]):
             return None

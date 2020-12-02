@@ -1,4 +1,6 @@
-# TODO: not working
+# Imagenet pt
+#  91.411,85.666,76.695   73.110,67.566,60.250    70.323,49.900,47.585
+#  slightly worse than ATSS
 _base_ = [
     '../_base_/datasets/kitti_mono.py',
     '../_base_/default_runtime.py'
@@ -35,8 +37,8 @@ model = dict(
         feat_channels=256,
         anchor_generator=dict(
             type='AnchorGenerator',
-            octave_base_scale=8,
-            scales_per_octave=3,
+            octave_base_scale=4,
+            scales_per_octave=1,  # default 3
             ratios=[0.5, 1.0, 2.0],
             strides=[4, 8, 16, 32, 64]),
         bbox_coder=dict(

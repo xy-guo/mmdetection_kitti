@@ -2,7 +2,8 @@ import mmcv
 import numpy as np
 import torch
 from torch.nn.modules.utils import _pair
-
+from mmdet.utils.debug import is_master, is_debug
+from mmdet.utils import get_root_logger
 from .builder import ANCHOR_GENERATORS
 
 
@@ -137,7 +138,15 @@ class AnchorGenerator(object):
                     scales=self.scales,
                     ratios=self.ratios,
                     center=center))
-        print('base_anchors', multi_level_base_anchors)
+        if is_debug('ANCHOR') and is_master():
+            logger = get_root_logger('INFO')
+            for i, x in enumerate(multi_level_base_anchors):
+                length = torch.sqrt((x[:, 3] - x[:, 1]) * (x[:, 2] - x[:, 0]))
+                ratio = (x[:, 3] - x[:, 1]) / (x[:, 2] - x[:, 0])
+                logger.info(f'base_anchor level {i}')
+                logger.info(x)
+                logger.info(f'length: {length}')
+                logger.info(f'ratio: {ratio}')
         return multi_level_base_anchors
 
     def gen_single_level_base_anchors(self,
