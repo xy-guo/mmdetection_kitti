@@ -121,6 +121,8 @@ def main():
         cfg.gpu_ids = range(world_size)
 
     set_debug_mode(args.debug)
+    if is_debug('NOWORKER'):
+        cfg.data.workers_per_gpu = 0
 
     # create work_dir
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
