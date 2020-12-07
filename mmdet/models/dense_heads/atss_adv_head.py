@@ -231,12 +231,12 @@ class ATSSAdvHead(ATSSHead):
             else:
                 max_cls_indices = scores.argmax(1)
                 bbox_pred = bbox_pred.permute(
-                    1, 2, 0).reshape(-1, 4, self.num_classes)
+                    1, 2, 0).reshape(-1, self.num_reg_channel, self.num_classes)
                 # add a blank bg class, --> [N, 4, N_cls+1]
                 bbox_pred = torch.cat(
                     [bbox_pred, torch.zeros_like(bbox_pred[:, :, :1])], dim=-1)
                 bbox_pred = torch.gather(
-                    bbox_pred, dim=2, index=max_cls_indices.reshape(-1, 1, 1).repeat(1, 4, 1)).squeeze(-1)
+                    bbox_pred, dim=2, index=max_cls_indices.reshape(-1, 1, 1).repeat(1, self.num_reg_channel, 1)).squeeze(-1)
 
             centerness = centerness.permute(1, 2, 0).reshape(-1).sigmoid()
 
@@ -273,7 +273,8 @@ class ATSSAdvHead(ATSSHead):
                 cfg.score_thr,
                 cfg.nms,
                 cfg.max_per_img,
-                score_factors=mlvl_centerness)
+                score_factors=mlvl_centerness,
+                num_bbox_channels=self.num_reg_channel)
             return det_bboxes, det_labels
         else:
             return mlvl_bboxes, mlvl_scores, mlvl_centerness

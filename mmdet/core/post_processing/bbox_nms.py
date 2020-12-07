@@ -9,7 +9,8 @@ def multiclass_nms(multi_bboxes,
                    score_thr,
                    nms_cfg,
                    max_num=-1,
-                   score_factors=None):
+                   score_factors=None,
+                   num_bbox_channels=4):
     """NMS for multi-class bboxes.
 
     Args:
@@ -30,11 +31,11 @@ def multiclass_nms(multi_bboxes,
     """
     num_classes = multi_scores.size(1) - 1
     # exclude background category
-    if multi_bboxes.shape[1] > 4:
-        bboxes = multi_bboxes.view(multi_scores.size(0), -1, 4)
+    if multi_bboxes.shape[1] > num_bbox_channels:
+        bboxes = multi_bboxes.view(multi_scores.size(0), -1, num_bbox_channels)
     else:
         bboxes = multi_bboxes[:, None].expand(
-            multi_scores.size(0), num_classes, 4)
+            multi_scores.size(0), num_classes, num_bbox_channels)
 
     scores = multi_scores[:, :-1]
     if score_factors is not None:
@@ -43,7 +44,7 @@ def multiclass_nms(multi_bboxes,
     labels = torch.arange(num_classes, dtype=torch.long)
     labels = labels.view(1, -1).expand_as(scores)
 
-    bboxes = bboxes.reshape(-1, 4)
+    bboxes = bboxes.reshape(-1, num_bbox_channels)
     scores = scores.reshape(-1)
     labels = labels.reshape(-1)
 
@@ -58,7 +59,10 @@ def multiclass_nms(multi_bboxes,
         return bboxes, labels
 
     # TODO: add size check before feed into batched_nms
-    dets, keep = batched_nms(bboxes, scores, labels, nms_cfg)
+    dets, keep = batched_nms(bboxes[:, :4], scores, labels, nms_cfg)
+
+    if num_bbox_channels > 4:
+        dets = torch.cat([bboxes[keep, :], dets[:, 4:5]], dim=1)
 
     if max_num > 0:
         dets = dets[:max_num]
