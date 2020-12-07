@@ -641,8 +641,12 @@ class ATSSHead(AnchorHead):
                                               gt_bboxes)
 
         num_valid_anchors = anchors.shape[0]
-        bbox_targets = torch.zeros_like(anchors)
-        bbox_weights = torch.zeros_like(anchors)
+        if getattr(self, 'num_reg_channel', None) is None:
+            self.num_reg_channel = anchors.shape[1]
+        bbox_targets = anchors.new_zeros(
+            [anchors.shape[0], self.num_reg_channel])
+        bbox_weights = anchors.new_zeros(
+            [anchors.shape[0], self.num_reg_channel])
         labels = anchors.new_full((num_valid_anchors, ),
                                   self.num_classes,
                                   dtype=torch.long)

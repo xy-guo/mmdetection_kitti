@@ -37,8 +37,10 @@ class ATSSAdvHead(ATSSHead):
                      use_sigmoid=True,
                      loss_weight=1.0),
                  reg_class_agnostic=True,
+                 num_reg_channel=4,
                  **kwargs):
         self.reg_class_agnostic = reg_class_agnostic
+        self.num_reg_channel = num_reg_channel
         super(ATSSAdvHead, self).__init__(num_classes,
                                           in_channels,
                                           stacked_convs=stacked_convs,
@@ -78,10 +80,10 @@ class ATSSAdvHead(ATSSHead):
             padding=1)
         if self.reg_class_agnostic:
             self.atss_reg = nn.Conv2d(
-                self.feat_channels, self.num_anchors * 4, 3, padding=1)
+                self.feat_channels, self.num_anchors * self.num_reg_channel, 3, padding=1)
         else:
             self.atss_reg = nn.Conv2d(
-                self.feat_channels, self.num_anchors * 4 * self.num_classes, 3, padding=1)
+                self.feat_channels, self.num_anchors * self.num_reg_channel * self.num_classes, 3, padding=1)
         self.atss_centerness = nn.Conv2d(
             self.feat_channels, self.num_anchors * 1, 3, padding=1)
         self.scales = nn.ModuleList(
@@ -115,18 +117,19 @@ class ATSSAdvHead(ATSSHead):
         cls_score = cls_score.permute(0, 2, 3, 1).reshape(
             -1, self.cls_out_channels).contiguous()
         if self.reg_class_agnostic:
-            bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 4)
+            bbox_pred = bbox_pred.permute(
+                0, 2, 3, 1).reshape(-1, self.num_reg_channel)
         else:
             bbox_pred = bbox_pred.permute(
-                0, 2, 3, 1).reshape(-1, 4, self.num_classes)
+                0, 2, 3, 1).reshape(-1, self.num_reg_channel, self.num_classes)
             # add a blank bg class, --> [N, 4, N_cls+1]
             bbox_pred = torch.cat(
                 [bbox_pred, torch.zeros_like(bbox_pred[:, :, :1])], dim=-1)
             bbox_pred = torch.gather(
-                bbox_pred, dim=2, index=labels.reshape(-1, 1, 1).repeat(1, 4, 1)).squeeze(-1)
+                bbox_pred, dim=2, index=labels.reshape(-1, 1, 1).repeat(1, self.num_reg_channel, 1)).squeeze(-1)
 
         centerness = centerness.permute(0, 2, 3, 1).reshape(-1)
-        bbox_targets = bbox_targets.reshape(-1, 4)
+        bbox_targets = bbox_targets.reshape(-1, self.num_reg_channel)
         labels = labels.reshape(-1)
         label_weights = label_weights.reshape(-1)
 
