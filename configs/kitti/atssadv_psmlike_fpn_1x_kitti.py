@@ -31,7 +31,6 @@ model = dict(
     bbox_head=dict(
         type='ATSSAdvHead',
         reg_class_agnostic=False,
-        reg_avg_factor='sum_centerness',
         num_classes=3,
         in_channels=256,
         stacked_convs=4,
@@ -52,7 +51,7 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=1.0),
-        loss_bbox=dict(type='GIoULoss', loss_weight=10.0),
+        loss_bbox=dict(type='GIoULoss', loss_weight=2.0),
         loss_centerness=dict(
             type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0)))
 # training and testing settings for ATSS
