@@ -38,9 +38,12 @@ class ATSSAdvHead(ATSSHead):
                      loss_weight=1.0),
                  reg_class_agnostic=True,
                  num_extra_reg_channel=0,
+                 reg_avg_factor='default',
                  **kwargs):
         self.reg_class_agnostic = reg_class_agnostic
         self.num_reg_channel = num_extra_reg_channel + 4
+        self.reg_avg_factor = reg_avg_factor
+        assert self.reg_avg_factor in ['default', 'sum_centerness']
         super(ATSSAdvHead, self).__init__(num_classes,
                                           in_channels,
                                           stacked_convs=stacked_convs,
@@ -156,11 +159,17 @@ class ATSSAdvHead(ATSSHead):
                 pos_anchors, pos_bbox_targets)
 
             # regression loss
+            if self.reg_avg_factor == 'default':
+                loss_bbox_avg_factor = 1.0
+            elif self.reg_avg_factor == 'sum_centerness':
+                loss_bbox_avg_factor = centerness_targets.sum()
+            else:
+                raise ValueError('wrong reg_avg_factor')
             loss_bbox = self.loss_bbox(
                 pos_decode_bbox_pred,
                 pos_decode_bbox_targets,
                 weight=centerness_targets,
-                avg_factor=1.0)
+                avg_factor=loss_bbox_avg_factor)
 
             # centerness loss
             loss_centerness = self.loss_centerness(
