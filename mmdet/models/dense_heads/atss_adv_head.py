@@ -37,10 +37,10 @@ class ATSSAdvHead(ATSSHead):
                      use_sigmoid=True,
                      loss_weight=1.0),
                  reg_class_agnostic=True,
-                 num_reg_channel=4,
+                 num_extra_reg_channel=0,
                  **kwargs):
         self.reg_class_agnostic = reg_class_agnostic
-        self.num_reg_channel = num_reg_channel
+        self.num_reg_channel = num_extra_reg_channel + 4
         super(ATSSAdvHead, self).__init__(num_classes,
                                           in_channels,
                                           stacked_convs=stacked_convs,
