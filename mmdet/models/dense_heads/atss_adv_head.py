@@ -112,7 +112,7 @@ class ATSSAdvHead(ATSSHead):
                 self.atss_reg = nn.Conv2d(
                     self.feat_channels, self.num_anchors * 4 * self.num_classes, 3, padding=1)
                 self.atss_extra_reg = nn.Conv2d(
-                    self.feat_channels, self.num_anchors * (self.num_reg_channel - 4), 3, padding=1)
+                    self.feat_channels, self.num_anchors * (self.num_reg_channel - 4) * self.num_classes, 3, padding=1)
         self.atss_centerness = nn.Conv2d(
             self.feat_channels, self.num_anchors * 1, 3, padding=1)
         self.scales = nn.ModuleList(
