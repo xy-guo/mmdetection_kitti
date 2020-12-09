@@ -38,11 +38,13 @@ class ATSSAdvHead(ATSSHead):
                      loss_weight=1.0),
                  reg_class_agnostic=True,
                  num_extra_reg_channel=0,
+                 seperate_extra_reg_branch=False,
                  reg_avg_factor='default',
                  **kwargs):
         self.reg_class_agnostic = reg_class_agnostic
         self.num_reg_channel = num_extra_reg_channel + 4
         self.reg_avg_factor = reg_avg_factor
+        self.seperate_extra_reg_branch = seperate_extra_reg_branch and self.num_reg_channel > 4
         assert self.reg_avg_factor in ['default', 'sum_centerness']
         super(ATSSAdvHead, self).__init__(num_classes,
                                           in_channels,
@@ -56,6 +58,8 @@ class ATSSAdvHead(ATSSHead):
         self.relu = nn.ReLU(inplace=True)
         self.cls_convs = nn.ModuleList()
         self.reg_convs = nn.ModuleList()
+        if self.seperate_extra_reg_branch:
+            self.extra_reg_convs = nn.ModuleList()
         for i in range(self.stacked_convs):
             chn = self.in_channels if i == 0 else self.feat_channels
             self.cls_convs.append(
@@ -76,21 +80,83 @@ class ATSSAdvHead(ATSSHead):
                     padding=1,
                     conv_cfg=self.conv_cfg,
                     norm_cfg=self.norm_cfg))
+            if self.seperate_extra_reg_branch:
+                self.extra_reg_convs.append(
+                    ConvModule(
+                        chn,
+                        self.feat_channels,
+                        3,
+                        stride=1,
+                        padding=1,
+                        conv_cfg=self.conv_cfg,
+                        norm_cfg=self.norm_cfg))
         self.atss_cls = nn.Conv2d(
             self.feat_channels,
             self.num_anchors * self.cls_out_channels,
             3,
             padding=1)
-        if self.reg_class_agnostic:
-            self.atss_reg = nn.Conv2d(
-                self.feat_channels, self.num_anchors * self.num_reg_channel, 3, padding=1)
+        if not self.seperate_extra_reg_branch:
+            if self.reg_class_agnostic:
+                self.atss_reg = nn.Conv2d(
+                    self.feat_channels, self.num_anchors * self.num_reg_channel, 3, padding=1)
+            else:
+                self.atss_reg = nn.Conv2d(
+                    self.feat_channels, self.num_anchors * self.num_reg_channel * self.num_classes, 3, padding=1)
         else:
-            self.atss_reg = nn.Conv2d(
-                self.feat_channels, self.num_anchors * self.num_reg_channel * self.num_classes, 3, padding=1)
+            if self.reg_class_agnostic:
+                self.atss_reg = nn.Conv2d(
+                    self.feat_channels, self.num_anchors * 4, 3, padding=1)
+                self.atss_extra_reg = nn.Conv2d(
+                    self.feat_channels, self.num_anchors * (self.num_reg_channel - 4), 3, padding=1)
+            else:
+                self.atss_reg = nn.Conv2d(
+                    self.feat_channels, self.num_anchors * 4 * self.num_classes, 3, padding=1)
+                self.atss_extra_reg = nn.Conv2d(
+                    self.feat_channels, self.num_anchors * (self.num_reg_channel - 4), 3, padding=1)
         self.atss_centerness = nn.Conv2d(
             self.feat_channels, self.num_anchors * 1, 3, padding=1)
         self.scales = nn.ModuleList(
             [Scale(1.0) for _ in self.anchor_generator.strides])
+
+    def forward_single(self, x, scale):
+        cls_feat = x
+        reg_feat = x
+        for cls_conv in self.cls_convs:
+            cls_feat = cls_conv(cls_feat)
+        for reg_conv in self.reg_convs:
+            reg_feat = reg_conv(reg_feat)
+        if self.seperate_extra_reg_branch:
+            extra_reg_feat = x
+            for extra_reg_conv in self.extra_reg_convs:
+                extra_reg_feat = extra_reg_conv(extra_reg_feat)
+        cls_score = self.atss_cls(cls_feat)
+        # we just follow atss, not apply exp in bbox_pred
+        if not self.seperate_extra_reg_branch:
+            bbox_pred = scale(self.atss_reg(reg_feat)).float()
+        else:
+            bbox_pred = scale(self.atss_reg(reg_feat)).float()
+            extra_bbox_pred = self.atss_extra_reg(extra_reg_feat).float()
+            if self.reg_class_agnostic:
+                # [B, self.num_anchors * 4, H, W] & [B, self.num_anchors * (self.num_reg_channel - 4), H, W]
+                B, _, H, W = bbox_pred.shape
+                bbox_pred = bbox_pred.view(B, self.num_anchors, 4, H, W)
+                extra_bbox_pred = extra_bbox_pred(
+                    B, self.num_anchors, self.num_reg_channel - 4, H, W)
+                bbox_pred = torch.cat([bbox_pred, extra_bbox_pred], dim=2)
+                bbox_pred = bbox_pred.view(
+                    B, self.num_anchors * self.num_reg_channel, H, W)
+            else:
+                # [B, self.num_anchors * 4 * self.num_classes, H, W] & [B, self.num_anchors * (self.num_reg_channel - 4), H, W]
+                B, _, H, W = bbox_pred.shape
+                bbox_pred = bbox_pred.view(
+                    B, self.num_anchors, 4, self.num_classes, H, W)
+                extra_bbox_pred = extra_bbox_pred(
+                    B, self.num_anchors, self.num_reg_channel - 4, self.num_classes, H, W)
+                bbox_pred = torch.cat([bbox_pred, extra_bbox_pred], dim=2)
+                bbox_pred = bbox_pred.view(
+                    B, self.num_anchors * self.num_reg_channel * self.num_classes, H, W)
+        centerness = self.atss_centerness(reg_feat)
+        return cls_score, bbox_pred, centerness
 
     def loss_single(self, anchors, cls_score, bbox_pred, centerness, labels,
                     label_weights, bbox_targets, num_total_samples):
