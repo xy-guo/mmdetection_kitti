@@ -150,7 +150,7 @@ class ATSSAdvHead(ATSSHead):
                 B, _, H, W = bbox_pred.shape
                 bbox_pred = bbox_pred.view(
                     B, self.num_anchors, 4, self.num_classes, H, W)
-                extra_bbox_pred = extra_bbox_pred(
+                extra_bbox_pred = extra_bbox_pred.view(
                     B, self.num_anchors, self.num_reg_channel - 4, self.num_classes, H, W)
                 bbox_pred = torch.cat([bbox_pred, extra_bbox_pred], dim=2)
                 bbox_pred = bbox_pred.view(
