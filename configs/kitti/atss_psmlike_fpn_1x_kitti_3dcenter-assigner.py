@@ -55,7 +55,10 @@ model = dict(
             type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0)))
 # training and testing settings for ATSS
 train_cfg = dict(
-    assigner=dict(type='ATSSAssigner', topk=9),
+    assigner=dict(type='ATSS3DCenterAssignerMMdet', topk=9,
+                  append_3d_centers=False,
+                  thresh_mode='ratio',
+                  thresh_ratio=0.75),
     allowed_border=-1,
     pos_weight=-1,
     debug=False)
