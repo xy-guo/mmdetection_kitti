@@ -26,6 +26,7 @@ class BaseDenseHead(nn.Module, metaclass=ABCMeta):
                       gt_labels=None,
                       gt_bboxes_ignore=None,
                       proposal_cfg=None,
+                      return_outs=False,
                       **kwargs):
         """
         Args:
@@ -51,9 +52,18 @@ class BaseDenseHead(nn.Module, metaclass=ABCMeta):
             loss_inputs = outs + (gt_bboxes, img_metas)
         else:
             loss_inputs = outs + (gt_bboxes, gt_labels, img_metas)
-        losses = self.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
+        if not return_outs:
+            losses = self.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
+        else:
+            losses, target_outs = self.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore, return_targets=True)
         if proposal_cfg is None:
-            return losses
+            if return_outs:
+                return losses, outs, target_outs
+            else:
+                return losses
         else:
             proposal_list = self.get_bboxes(*outs, img_metas, cfg=proposal_cfg)
-            return losses, proposal_list
+            if return_outs:
+                return losses, proposal_list, outs, target_outs
+            else:
+                return losses, proposal_list

@@ -161,7 +161,8 @@ class FCOSHead(AnchorFreeHead):
              gt_bboxes,
              gt_labels,
              img_metas,
-             gt_bboxes_ignore=None):
+             gt_bboxes_ignore=None,
+             return_targets=False):
         """Compute loss of the head.
 
         Args:
@@ -188,7 +189,7 @@ class FCOSHead(AnchorFreeHead):
         featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]
         all_level_points = self.get_points(featmap_sizes, bbox_preds[0].dtype,
                                            bbox_preds[0].device)
-        labels, bbox_targets = self.get_targets(all_level_points, gt_bboxes,
+        labels, bbox_targets = self.get_targets(all_level_points, [x[:, :4] for x in gt_bboxes],
                                                 gt_labels)
 
         num_imgs = cls_scores[0].size(0)
@@ -245,10 +246,16 @@ class FCOSHead(AnchorFreeHead):
             loss_bbox = pos_bbox_preds.sum()
             loss_centerness = pos_centerness.sum()
 
-        return dict(
-            loss_cls=loss_cls,
-            loss_bbox=loss_bbox,
-            loss_centerness=loss_centerness)
+        if not return_targets:
+            return dict(
+                loss_cls=loss_cls,
+                loss_bbox=loss_bbox,
+                loss_centerness=loss_centerness)
+        else:
+            return dict(
+                loss_cls=loss_cls,
+                loss_bbox=loss_bbox,
+                loss_centerness=loss_centerness), (None, labels, None, bbox_targets, None, None, None)
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'centernesses'))
     def get_bboxes(self,

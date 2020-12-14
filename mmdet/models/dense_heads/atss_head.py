@@ -228,7 +228,8 @@ class ATSSHead(AnchorHead):
              gt_bboxes,
              gt_labels,
              img_metas,
-             gt_bboxes_ignore=None):
+             gt_bboxes_ignore=None,
+             return_targets=False):
         """Compute losses of the head.
 
         Args:
@@ -292,10 +293,16 @@ class ATSSHead(AnchorHead):
         if bbox_avg_factor < EPS:
             bbox_avg_factor = 1
         losses_bbox = list(map(lambda x: x / bbox_avg_factor, losses_bbox))
-        return dict(
-            loss_cls=losses_cls,
-            loss_bbox=losses_bbox,
-            loss_centerness=loss_centerness)
+        if not return_targets:
+            return dict(
+                loss_cls=losses_cls,
+                loss_bbox=losses_bbox,
+                loss_centerness=loss_centerness)
+        else:
+            return dict(
+                loss_cls=losses_cls,
+                loss_bbox=losses_bbox,
+                loss_centerness=loss_centerness), cls_reg_targets
 
     def centerness_target(self, anchors, bbox_targets):
         # only calculate pos centerness targets, otherwise there may be nan
