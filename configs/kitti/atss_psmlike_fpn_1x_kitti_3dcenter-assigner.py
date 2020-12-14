@@ -58,7 +58,7 @@ train_cfg = dict(
     assigner=dict(type='ATSS3DCenterAssignerMMdet', topk=9,
                   append_3d_centers=False,
                   thresh_mode='ratio',
-                  thresh_ratio=0.75),
+                  thresh_ratio=0.8),
     allowed_border=-1,
     pos_weight=-1,
     debug=False)
