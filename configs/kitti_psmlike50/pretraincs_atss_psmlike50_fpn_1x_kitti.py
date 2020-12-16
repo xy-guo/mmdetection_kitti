@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/datasets/cityscapes_detection.py',
+    '../_base_/datasets/cityscapes_detection_small.py',
     '../_base_/default_runtime.py'
 ]
 # ATSS Model
