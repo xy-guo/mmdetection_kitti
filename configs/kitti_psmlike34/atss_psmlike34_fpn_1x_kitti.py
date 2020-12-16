@@ -17,10 +17,7 @@ model = dict(
         norm_cfg=dict(type='BN', requires_grad=True),
         norm_eval=True,
         style='pytorch',
-        with_max_pool=False,
-        deep_stem=False,  # TODO: no pretrained model, cannot modify
-        block_with_final_relu=True,
-        base_channels=64),
+        with_max_pool=False),
     neck=dict(
         type='FPN',
         in_channels=[64, 128, 256, 512],
@@ -55,10 +52,7 @@ model = dict(
             type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0)))
 # training and testing settings for ATSS
 train_cfg = dict(
-    assigner=dict(type='ATSS3DCenterAssignerMMdet', topk=9,
-                  append_3d_centers=False,
-                  thresh_mode='ratio',
-                  thresh_ratio=0.8),
+    assigner=dict(type='ATSSAssigner', topk=9),
     allowed_border=-1,
     pos_weight=-1,
     debug=False)
@@ -80,5 +74,3 @@ lr_config = dict(
     step=[16, 22])
 total_epochs = 24
 log_config = dict(interval=10)
-# For better, more stable performance initialize from COCO: 39.4AP
-# load_from = 'http://download.openmmlab.com/mmdetection/v2.0/atss/atss_r50_fpn_1x_coco/atss_r50_fpn_1x_coco_20200209-985f7bd0.pth'

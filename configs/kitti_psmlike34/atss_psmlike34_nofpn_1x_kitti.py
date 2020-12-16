@@ -1,5 +1,4 @@
-# Imagenet pt
-# 97.161	91.56	84.641	76.671	69.092	61.406	77.551	54.158	51.365
+# TODO: not working
 _base_ = [
     '../_base_/datasets/kitti_mono.py',
     '../_base_/default_runtime.py'
@@ -12,25 +11,26 @@ model = dict(
         type='ResNet',
         depth=34,
         num_stages=4,
-        out_indices=(0, 1, 2, 3),
+        out_indices=(3,),
         frozen_stages=1,
         norm_cfg=dict(type='BN', requires_grad=True),
         norm_eval=True,
         style='pytorch',
         with_max_pool=False,
+        strides=(1, 2, 1, 1),
+        dilations=(1, 1, 2, 4),
         deep_stem=False,  # TODO: no pretrained model, cannot modify
         block_with_final_relu=True,
         base_channels=64),
     neck=dict(
         type='FPN',
-        in_channels=[64, 128, 256, 512],
+        in_channels=[512],
         out_channels=256,  # TODO
-        start_level=1,
+        start_level=0,
         add_extra_convs='on_output',
         num_outs=5),
     bbox_head=dict(
-        type='ATSSAdvHead',
-        reg_class_agnostic=False,
+        type='ATSSHead',
         num_classes=3,
         in_channels=256,
         stacked_convs=4,
@@ -78,5 +78,3 @@ lr_config = dict(
     step=[16, 22])
 total_epochs = 24
 log_config = dict(interval=10)
-# For better, more stable performance initialize from COCO: 39.4AP
-# load_from = 'http://download.openmmlab.com/mmdetection/v2.0/atss/atss_r50_fpn_1x_coco/atss_r50_fpn_1x_coco_20200209-985f7bd0.pth'
