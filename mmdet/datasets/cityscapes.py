@@ -98,8 +98,7 @@ class CityscapesDataset(CocoDataset):
             bboxes=gt_bboxes,
             labels=gt_labels,
             bboxes_ignore=gt_bboxes_ignore,
-            masks=gt_masks_ann,
-            seg_map=img_info['segm_file'])
+            masks=gt_masks_ann)
 
         return ann
 
