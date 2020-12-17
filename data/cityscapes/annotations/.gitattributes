@@ -1,0 +1,2 @@
+instancesonly_filtered_gtFine_val.json filter=lfs diff=lfs merge=lfs -text
+instancesonly_filtered_gtFine_train.json filter=lfs diff=lfs merge=lfs -text
