@@ -389,7 +389,8 @@ class ResNet(nn.Module):
                  with_cp=False,
                  with_max_pool=True,
                  zero_init_residual=True,
-                 block_with_final_relu=True):
+                 block_with_final_relu=True,
+                 num_channels_factor=None):
         super(ResNet, self).__init__()
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for resnet')
@@ -424,6 +425,7 @@ class ResNet(nn.Module):
         self.inplanes = stem_channels
         self.with_max_pool = with_max_pool
         self.block_with_final_relu = block_with_final_relu
+        self.num_channels_factor = num_channels_factor
 
         self._make_stem_layer(in_channels, stem_channels)
 
@@ -436,7 +438,7 @@ class ResNet(nn.Module):
                 stage_plugins = self.make_stage_plugins(plugins, i)
             else:
                 stage_plugins = None
-            planes = base_channels * 2**i
+            planes = base_channels * (2**i if self.num_channels_factor is None else self.num_channels_factor[i])
             res_layer = self.make_res_layer(
                 block=self.block,
                 inplanes=self.inplanes,
