@@ -382,6 +382,7 @@ class ResNet(nn.Module):
                  frozen_stages=-1,
                  conv_cfg=None,
                  norm_cfg=dict(type='BN', requires_grad=True),
+                 stem_norm_cfg=None,
                  norm_eval=True,
                  dcn=None,
                  stage_with_dcn=(False, False, False, False),
@@ -412,6 +413,7 @@ class ResNet(nn.Module):
         self.frozen_stages = frozen_stages
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
+        self.stem_norm_cfg = norm_cfg if stem_norm_cfg is None else stem_norm_cfg
         self.with_cp = with_cp
         self.norm_eval = norm_eval
         self.dcn = dcn
@@ -546,7 +548,7 @@ class ResNet(nn.Module):
                     stride=2,
                     padding=1,
                     bias=False),
-                build_norm_layer(self.norm_cfg, stem_channels // 2)[1],
+                build_norm_layer(self.stem_norm_cfg, stem_channels // 2)[1],
                 nn.ReLU(inplace=True),
                 build_conv_layer(
                     self.conv_cfg,
@@ -556,7 +558,7 @@ class ResNet(nn.Module):
                     stride=1,
                     padding=1,
                     bias=False),
-                build_norm_layer(self.norm_cfg, stem_channels // 2)[1],
+                build_norm_layer(self.stem_norm_cfg, stem_channels // 2)[1],
                 nn.ReLU(inplace=True),
                 build_conv_layer(
                     self.conv_cfg,
@@ -566,7 +568,7 @@ class ResNet(nn.Module):
                     stride=1,
                     padding=1,
                     bias=False),
-                build_norm_layer(self.norm_cfg, stem_channels)[1],
+                build_norm_layer(self.stem_norm_cfg, stem_channels)[1],
                 nn.ReLU(inplace=True))
         else:
             self.conv1 = build_conv_layer(
@@ -578,7 +580,7 @@ class ResNet(nn.Module):
                 padding=3,
                 bias=False)
             self.norm1_name, norm1 = build_norm_layer(
-                self.norm_cfg, stem_channels, postfix=1)
+                self.stem_norm_cfg, stem_channels, postfix=1)
             self.add_module(self.norm1_name, norm1)
             self.relu = nn.ReLU(inplace=True)
         if self.with_max_pool:
