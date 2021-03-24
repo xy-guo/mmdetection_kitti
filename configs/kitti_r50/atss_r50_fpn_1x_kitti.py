@@ -7,7 +7,7 @@ _base_ = [
 # ATSS Model
 model = dict(
     type='ATSS',
-    pretrained=None,
+    pretrained='torchvision://resnet50',
     backbone=dict(
         type='ResNet',
         depth=50,
@@ -74,4 +74,4 @@ lr_config = dict(
 total_epochs = 10
 log_config = dict(interval=10)
 # For better, more stable performance initialize from COCO: 39.4AP
-load_from = 'http://download.openmmlab.com/mmdetection/v2.0/atss/atss_r50_fpn_1x_coco/atss_r50_fpn_1x_coco_20200209-985f7bd0.pth'
+# load_from = 'http://download.openmmlab.com/mmdetection/v2.0/atss/atss_r50_fpn_1x_coco/atss_r50_fpn_1x_coco_20200209-985f7bd0.pth'

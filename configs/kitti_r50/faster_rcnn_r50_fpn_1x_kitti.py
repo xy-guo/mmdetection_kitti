@@ -6,7 +6,7 @@ _base_ = [
     '../_base_/default_runtime.py'
 ]
 model = dict(
-    pretrained=None,
+    pretrained='torchvision://resnet50',
     roi_head=dict(
         bbox_head=dict(
             type='Shared2FCBBoxHead',
@@ -37,6 +37,6 @@ lr_config = dict(
 total_epochs = 10
 log_config = dict(interval=10)
 # For better, more stable performance initialize from COCO
-load_from = 'https://open-mmlab.s3.ap-northeast-2.amazonaws.com/mmdetection/v2.0/faster_rcnn/faster_rcnn_r50_fpn_1x_coco/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth'  # noqa
+# load_from = 'https://open-mmlab.s3.ap-northeast-2.amazonaws.com/mmdetection/v2.0/faster_rcnn/faster_rcnn_r50_fpn_1x_coco/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth'  # noqa
 # load_from = './checkpoints/faster_rcnn_r50_fpn_1x_cityscapes_20200227-362cfbbf.pth'
 # load_from = None

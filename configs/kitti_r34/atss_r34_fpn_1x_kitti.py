@@ -1,7 +1,3 @@
-# COCO pt
-# 94.214	88.334	82.987	84.894	79.25	72.156	82.401	66.668	63.735
-# Imagenet pt
-# 96.619	91.175	84.054	75.234	68.09	60.762	75.863	55.306	52.874
 _base_ = [
     '../_base_/datasets/kitti_mono.py',
     '../_base_/default_runtime.py'
@@ -9,20 +5,19 @@ _base_ = [
 # ATSS Model
 model = dict(
     type='ATSS',
-    pretrained='torchvision://resnet50',
+    pretrained='torchvision://resnet34',
     backbone=dict(
         type='ResNet',
-        depth=50,
+        depth=34,
         num_stages=4,
         out_indices=(0, 1, 2, 3),
         frozen_stages=1,
         norm_cfg=dict(type='BN', requires_grad=True),
         norm_eval=True,
-        style='pytorch',
-        with_max_pool=False),
+        style='pytorch'),
     neck=dict(
         type='FPN',
-        in_channels=[256, 512, 1024, 2048],
+        in_channels=[64, 128, 256, 512],
         out_channels=256,
         start_level=1,
         add_extra_convs='on_output',
@@ -36,9 +31,9 @@ model = dict(
         anchor_generator=dict(
             type='AnchorGenerator',
             ratios=[1.0],
-            octave_base_scale=16,
+            octave_base_scale=8,
             scales_per_octave=1,
-            strides=[4, 8, 16, 32, 64]),
+            strides=[8, 16, 32, 64, 128]),
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder',
             target_means=[.0, .0, .0, .0],
@@ -76,5 +71,3 @@ lr_config = dict(
     step=[7])
 total_epochs = 10
 log_config = dict(interval=10)
-# For better, more stable performance initialize from COCO: 39.4AP
-# load_from = 'http://download.openmmlab.com/mmdetection/v2.0/atss/atss_r50_fpn_1x_coco/atss_r50_fpn_1x_coco_20200209-985f7bd0.pth'
