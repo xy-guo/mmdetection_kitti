@@ -72,6 +72,6 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=0.001,
-    step=[7])
-total_epochs = 10
+    step=[14])
+total_epochs = 20
 log_config = dict(interval=10)

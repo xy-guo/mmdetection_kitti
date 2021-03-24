@@ -73,8 +73,8 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=0.001,
-    step=[7])
-total_epochs = 10
+    step=[14])
+total_epochs = 20
 log_config = dict(interval=10)
 # For better, more stable performance initialize from COCO: 39.4AP
 # load_from = 'http://download.openmmlab.com/mmdetection/v2.0/atss/atss_r50_fpn_1x_coco/atss_r50_fpn_1x_coco_20200209-985f7bd0.pth'
