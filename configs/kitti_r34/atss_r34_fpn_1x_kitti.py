@@ -1,5 +1,3 @@
-# Imagenet pt
-# 97.161	91.56	84.641	76.671	69.092	61.406	77.551	54.158	51.365
 _base_ = [
     '../_base_/datasets/kitti_mono.py',
     '../_base_/default_runtime.py'
@@ -16,18 +14,16 @@ model = dict(
         frozen_stages=1,
         norm_cfg=dict(type='BN', requires_grad=True),
         norm_eval=True,
-        style='pytorch',
-        with_max_pool=False),
+        style='pytorch'),
     neck=dict(
         type='FPN',
         in_channels=[64, 128, 256, 512],
-        out_channels=256,  # TODO
+        out_channels=256,
         start_level=1,
         add_extra_convs='on_output',
         num_outs=5),
     bbox_head=dict(
-        type='ATSSAdvHead',
-        reg_class_agnostic=False,
+        type='ATSSHead',
         num_classes=3,
         in_channels=256,
         stacked_convs=4,
@@ -35,9 +31,9 @@ model = dict(
         anchor_generator=dict(
             type='AnchorGenerator',
             ratios=[1.0],
-            octave_base_scale=16,
+            octave_base_scale=8,
             scales_per_octave=1,
-            strides=[4, 8, 16, 32, 64]),
+            strides=[8, 16, 32, 64, 128]),
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder',
             target_means=[.0, .0, .0, .0],
