@@ -664,7 +664,7 @@ class ATSSHead(AnchorHead):
         if len(pos_inds) > 0:
             if hasattr(self, 'bbox_coder'):
                 pos_bbox_targets = self.bbox_coder.encode(
-                    sampling_result.pos_bboxes, sampling_result.pos_gt_bboxes)
+                    sampling_result.pos_bboxes, sampling_result.pos_gt_bboxes[:, :4])
             else:
                 # used in VFNetHead
                 pos_bbox_targets = sampling_result.pos_gt_bboxes
