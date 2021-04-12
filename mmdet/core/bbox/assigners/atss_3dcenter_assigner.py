@@ -6,17 +6,17 @@ from .atss_assigner import ATSSAssigner
 
 
 @BBOX_ASSIGNERS.register_module()
-class ATSS3DCenterAssignerMMdet(ATSSAssigner):
+class ATSS3DCenterAssigner(ATSSAssigner):
     def __init__(self,
                  topk,
                  iou_calculator=dict(type='BboxOverlaps2D'),
                  ignore_iof_thr=-1,
-                 append_3d_centers=False,
-                 thresh_mode='ratio',
+                 append_3d_centers=True,
+                 thresh_mode='meanstd',
                  thresh_ratio=0.75):
-        super(ATSS3DCenterAssignerMMdet, self).__init__(topk=topk,
-                                                        iou_calculator=iou_calculator,
-                                                        ignore_iof_thr=ignore_iof_thr)
+        super(ATSS3DCenterAssigner, self).__init__(topk=topk,
+                                                   iou_calculator=iou_calculator,
+                                                   ignore_iof_thr=ignore_iof_thr)
         self.append_3d_centers = append_3d_centers
         self.thresh_mode = thresh_mode
         assert self.thresh_mode in ['meanstd', 'ratio']
@@ -111,27 +111,11 @@ class ATSS3DCenterAssignerMMdet(ATSSAssigner):
             is_pos = candidate_overlaps >= overlaps_thr_per_gt[None, :]
         elif self.thresh_mode == 'ratio':
             thresh_ratio = self.thresh_ratio
-            candidate_overlaps_by_lvl = candidate_overlaps.view(
-                len(num_level_bboxes), selectable_k, num_gt)
-            overlaps_mean_by_lvl = candidate_overlaps_by_lvl.median(
-                1, keepdim=True).values
-            overlaps_thr_by_lvl = overlaps_mean_by_lvl.max(
-                0, keepdim=True).values * thresh_ratio
-            # is_pos_by_lvl = overlaps_mean_by_lvl > overlaps_thr_by_lvl
-            # is_pos = (is_pos_by_lvl.repeat(1, selectable_k, 1)
-            #   ).view(candidate_overlaps.shape)
-            is_pos = candidate_overlaps > overlaps_thr_by_lvl.view(1, num_gt)
-            # overlaps_mean_per_gt = candidate_overlaps.mean(0)
-            # overlaps_std_per_gt = candidate_overlaps.std(0)
-            # overlaps_thr_per_gt = overlaps_mean_per_gt + overlaps_std_per_gt
-            # is_pos_2 = candidate_overlaps >= overlaps_thr_per_gt[None, :]
-            # print(is_pos_2.view(len(num_level_bboxes), selectable_k, num_gt).sum(1))
-            # print(is_pos.view(len(num_level_bboxes), selectable_k, num_gt).sum(1))
-            # tmp1 = is_pos_2.view(len(num_level_bboxes),
-            #                      selectable_k, num_gt).sum(1)
-            # tmp2 = is_pos.view(len(num_level_bboxes),
-            #                    selectable_k, num_gt).sum(1)
-            # print(torch.abs(tmp1 - tmp2).sum(0))
+            candidate_overlaps_by_lvl = candidate_overlaps.view(len(num_level_bboxes), selectable_k, num_gt)
+            overlaps_mean_by_lvl = candidate_overlaps_by_lvl.mean(1, keepdim=True)
+            overlaps_thr_by_lvl = overlaps_mean_by_lvl.max(0, keepdim=True).values * thresh_ratio
+            is_pos_by_lvl = overlaps_mean_by_lvl > overlaps_thr_by_lvl
+            is_pos = (is_pos_by_lvl.repeat(1, selectable_k, 1)).view(candidate_overlaps.shape)
         else:
             raise ValueError('invalid thresh mode')
 
