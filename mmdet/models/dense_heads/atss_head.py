@@ -579,6 +579,40 @@ class ATSSHead(AnchorHead):
                                              num_level_anchors)
         bbox_weights_list = images_to_levels(all_bbox_weights,
                                              num_level_anchors)
+
+        if is_debug("VIS_ASSIGNER") and is_master():
+            def tonp(x):
+                return x.cpu().numpy()
+            for idx, gt_boxes_per_img in enumerate(gt_bboxes_list):
+                img = img_metas[idx]['image'].permute(1, 2, 0)
+                img_shape = np.array(list(img.shape[:2]))
+                labels_per_img = [x[idx] for x in labels_list]
+                label_weights_per_img = [x[idx] for x in label_weights_list]
+                bbox_targets_per_img = [x[idx] for x in bbox_targets_list]
+                bbox_weights_per_img = [x[idx] for x in bbox_weights_list]
+                img = tonp(img) / 5 + 0.5
+                vis_img = np.vstack([img[::2, ::2], np.zeros_like(img[::2, ::2])])
+                cur_h = img.shape[0] // 2
+                cur_w = 0
+                for s, (l, lw, b, bw) in enumerate(zip(labels_per_img, label_weights_per_img, bbox_targets_per_img, bbox_weights_per_img)):
+                    if s >= 4:
+                        continue
+                    s += 2
+                    l = l.view(*(img_shape // 2 ** s))
+                    b = b.view(*(img_shape // 2 ** s), -1)
+                    bw = bw.view(*(img_shape // 2 ** s), -1)
+                    l = tonp(l)
+                    b = tonp(b)
+                    bw = tonp(bw)
+                    w = bw[..., 0]
+                    img_s = img.copy()[::2**s, ::2**s]
+                    img_s[w > 0] = 1
+                    vis_img[cur_h:cur_h+img_s.shape[0], cur_w:cur_w+img_s.shape[1]] = img_s
+                    cur_w += img_s.shape[1]
+                import cv2
+                cv2.imshow('win', cv2.resize(vis_img[:, :, ::-1], None, fx=5, fy=5, interpolation=cv2.INTER_NEAREST))
+                cv2.waitKey(0)
+
         return (anchors_list, labels_list, label_weights_list,
                 bbox_targets_list, bbox_weights_list, num_total_pos,
                 num_total_neg)
